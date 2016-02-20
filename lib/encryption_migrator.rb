@@ -5,17 +5,17 @@ module EncryptionMigrator
     model.to_s.singularize.camelize.constantize
   end
 
-  def self.define_class_with_encrypted(model_const, attr, encrypted_attr, key)
-    model_const.class_eval do
+  def self.define_class_with_encrypted(const, attr, encrypted_attr, key)
+    const.class_eval do
       attr_encrypted attr, key: key, attribute: encrypted_attr
     end
   end
 
-  def self.decrypt_and_update_column(model_arg, model_const, column, key)
+  def self.decrypt_and_update_row(row, const, column, key)
     encrypted_sym = encrypted_column_sym(column)
-    define_class_with_encrypted(model_const, column, encrypted_sym, key)
-    attr = model_const.decrypt(column, model_arg.read_attribute(encrypted_sym))
-    model_arg.update_column(:"#{column}", attr)
+    define_class_with_encrypted(const, column, encrypted_sym, key)
+    attr = const.decrypt(column, row.read_attribute(encrypted_sym))
+    row.update_column(:"#{column}", attr)
   end
 
   def self.encrypted_column_sym(column)
@@ -25,14 +25,14 @@ end
 
 class ActiveRecord::Migration
   def unencrypt_field(model, column, key:)
-    model_const = EncryptionMigrator.constant_for(model)
+    const = EncryptionMigrator.constant_for(model)
     encrypted_sym = :"encrypted_#{column}"
 
     add_column model, column, :string
-    model_const.reset_column_information
+    const.reset_column_information
 
-    model_const.all.each do |model_arg|
-      EncryptionMigrator.decrypt_and_update_column(model_arg, model_const, column, key)
+    const.all.each do |row|
+      EncryptionMigrator.decrypt_and_update_row(row, const, column, key)
     end
 
     remove_column model, encrypted_sym
